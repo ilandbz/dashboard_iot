@@ -15,7 +15,7 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
-// ==== DATOS MOCK (simulan el backend) ====
+// ==== DATOS MOCK INICIALES ====
 const MOCK_DISPOSITIVOS = [
   {
     id: 1,
@@ -23,31 +23,23 @@ const MOCK_DISPOSITIVOS = [
     tipo: "Temperatura",
     aula: "Tigresito Primaria 1 A",
   },
-  {
-    id: 2,
-    nombre: "Sensor Humedad Aula 1",
-    tipo: "Humedad",
-    aula: "Tigresito Primaria 1 A",
-  },
 ];
 
-const MOCK_LECTURAS_POR_DISPOSITIVO = {
-  1: {
-    serie: [
-      { hora: "08:00", valor: 18.2 },
-      { hora: "08:15", valor: 18.6 },
-      { hora: "08:30", valor: 19.1 },
-      { hora: "08:45", valor: 19.4 },
-      { hora: "09:00", valor: 20.0 },
-      { hora: "09:15", valor: 20.3 },
-      { hora: "09:30", valor: 20.1 },
-      { hora: "09:45", valor: 19.8 },
-      { hora: "10:00", valor: 19.6 },
-    ],
-    min: 18.2,
-    max: 20.3,
-    actual: 19.6,
-  },
+let mockLecturas = {
+  serie: [
+    { hora: "08:00", valor: 18.2 },
+    { hora: "08:15", valor: 18.6 },
+    { hora: "08:30", valor: 19.1 },
+    { hora: "08:45", valor: 19.4 },
+    { hora: "09:00", valor: 20.0 },
+    { hora: "09:15", valor: 20.3 },
+    { hora: "09:30", valor: 20.1 },
+    { hora: "09:45", valor: 19.8 },
+    { hora: "10:00", valor: 19.6 },
+  ],
+  min: 18.2,
+  max: 20.3,
+  actual: 19.6,
 };
 
 export default function Temperatura() {
@@ -55,36 +47,53 @@ export default function Temperatura() {
   const [stats, setStats] = useState({ min: null, max: null, actual: null });
   const [err, setErr] = useState("");
 
-  // --- FUNCIÓN getJSON usando MOCKS ---
+  // --- FUNCIÓN getJSON usando MOCKS DINÁMICOS ---
   const getJSON = async (url) => {
-    // 🔹 Cuando sea real backend, reemplazas TODO el cuerpo por:
-    // const res = await fetch(url);
-    // const text = await res.text();
-    // const ct = res.headers.get('content-type') || '';
-    // if (!res.ok) throw new Error(`${res.status} ${text.slice(0,120)}`);
-    // if (!ct.includes('application/json')) throw new Error(`No JSON en ${url}: ${text.slice(0,120)}`);
-    // return JSON.parse(text);
+    // cuando cambies a backend real, reemplazas TODO esto por fetch()
 
-    // MOCK: /api/dispositivos
     if (url === "/api/dispositivos") {
-      return Promise.resolve(MOCK_DISPOSITIVOS);
+      return MOCK_DISPOSITIVOS;
     }
 
-    // MOCK: /api/lecturas/serie/:id
     const match = url.match(/\/api\/lecturas\/serie\/(\d+)/);
     if (match) {
-      const id = Number(match[1]);
-      const data = MOCK_LECTURAS_POR_DISPOSITIVO[id];
-      if (!data) throw new Error(`No hay lecturas mock para dispositivo ${id}`);
-      return Promise.resolve(data);
+      // 👉 aquí simulamos que llega una nueva lectura cada vez
+      const last = mockLecturas.serie[mockLecturas.serie.length - 1];
+
+      // hora nueva (solo para ver cambio)
+      const now = new Date();
+      const hora = now.toLocaleTimeString("es-PE", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      // temperatura nueva (random alrededor del último valor)
+      const delta = (Math.random() * 0.6 - 0.3).toFixed(1); // -0.3 a +0.3
+      const nuevoValor = +(last.valor + Number(delta)).toFixed(1);
+
+      const nuevaSerie = [
+        ...mockLecturas.serie.slice(-8), // mantén solo últimas 8
+        { hora, valor: nuevoValor },
+      ];
+
+      const valores = nuevaSerie.map((p) => p.valor);
+      const min = Math.min(...valores);
+      const max = Math.max(...valores);
+      const actual = nuevaSerie[nuevaSerie.length - 1].valor;
+
+      mockLecturas = { serie: nuevaSerie, min, max, actual };
+      return mockLecturas;
     }
 
     throw new Error(`URL mock no soportada: ${url}`);
   };
 
   useEffect(() => {
-    (async () => {
+    let cancelado = false;
+
+    const cargarDatos = async () => {
       try {
+        console.log("⏱ tick temperatura");
         setErr("");
 
         const dispositivos = await getJSON("/api/dispositivos");
@@ -92,13 +101,27 @@ export default function Temperatura() {
         if (!temp) throw new Error("No hay dispositivo de temperatura");
 
         const js = await getJSON(`/api/lecturas/serie/${temp.id}`);
+        if (cancelado) return;
+
         setSerie(js.serie || []);
         setStats({ min: js.min, max: js.max, actual: js.actual });
       } catch (e) {
+        if (cancelado) return;
         setErr(e.message);
         console.error(e);
       }
-    })();
+    };
+
+    // primera carga
+    cargarDatos();
+
+    // recarga cada 1 segundo
+    const id = setInterval(cargarDatos, 1000);
+
+    return () => {
+      cancelado = true;
+      clearInterval(id);
+    };
   }, []);
 
   const data = useMemo(
@@ -156,7 +179,6 @@ export default function Temperatura() {
           style={{ height: 360 }}
         >
           <div className="mb-3">Historial registro</div>
-          {/* clave para forzar remount y evitar “canvas in use” */}
           <Line key={serie.length} data={data} options={options} redraw />
         </div>
         <div className="bg-[#2b2450] rounded-2xl p-4">

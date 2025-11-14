@@ -8,6 +8,11 @@ use App\Http\Controllers\Api\LecturaController;
 use Illuminate\Support\Facades\Route;
 use App\Models\User;
 
+
+Route::get('/test', function () {
+    echo 'as';
+});
+
 Route::get('/aulas', [AulaController::class, 'index']);
 Route::get('/aulas/{aula}', [AulaController::class, 'show']);
 Route::get('/profesores', fn() => \App\Models\User::select('id','name','email')->get());
