@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body{
+  background: radial-gradient(1200px 900px at 20% -10%, #1a167a 0%, transparent 60%),
+              linear-gradient(180deg, #00001a 0%, #1a0066 100%);
+  color:#fff;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+/* Componentes reutilizables */
+@layer components {
+  .btn        { @apply rounded-[14px] px-4 py-2 font-bold; }
+  .btn-dark   { @apply bg-black text-white; }
+  .btn-light  { @apply bg-slate-300 text-black; }
+  .btn-indigo { @apply bg-indigo-600 text-white; }
+
+  .input  { @apply bg-gray-200 text-gray-900 rounded-md px-3 py-2 w-full; }
+  .select { @apply bg-gray-200 text-gray-900 rounded-md px-3 py-2 w-full; }
+
+  .neon-panel  { @apply bg-[#101028] rounded-2xl p-6 text-white shadow-[0_0_28px_#6b5cff33]; }
+  .neon-header { @apply bg-[#0f0f2f] rounded-2xl p-6 font-extrabold text-[22px]; }
+}
