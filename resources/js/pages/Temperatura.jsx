@@ -13,116 +13,98 @@ import {
   Filler,
 } from "chart.js";
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
-
-// ==== DATOS MOCK INICIALES ====
-const MOCK_DISPOSITIVOS = [
-  {
-    id: 1,
-    nombre: "Sensor Aula 1",
-    tipo: "Temperatura",
-    aula: "Tigresito Primaria 1 A",
-  },
-];
-
-let mockLecturas = {
-  serie: [
-    { hora: "08:00", valor: 18.2 },
-    { hora: "08:15", valor: 18.6 },
-    { hora: "08:30", valor: 19.1 },
-    { hora: "08:45", valor: 19.4 },
-    { hora: "09:00", valor: 20.0 },
-    { hora: "09:15", valor: 20.3 },
-    { hora: "09:30", valor: 20.1 },
-    { hora: "09:45", valor: 19.8 },
-    { hora: "10:00", valor: 19.6 },
-  ],
-  min: 18.2,
-  max: 20.3,
-  actual: 19.6,
-};
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 export default function Temperatura() {
   const [serie, setSerie] = useState([]);
   const [stats, setStats] = useState({ min: null, max: null, actual: null });
   const [err, setErr] = useState("");
 
-  // --- FUNCIÓN getJSON usando MOCKS DINÁMICOS ---
-  const getJSON = async (url) => {
-    // cuando cambies a backend real, reemplazas TODO esto por fetch()
-
-    if (url === "/api/dispositivos") {
-      return MOCK_DISPOSITIVOS;
-    }
-
-    const match = url.match(/\/api\/lecturas\/serie\/(\d+)/);
-    if (match) {
-      // 👉 aquí simulamos que llega una nueva lectura cada vez
-      const last = mockLecturas.serie[mockLecturas.serie.length - 1];
-
-      // hora nueva (solo para ver cambio)
-      const now = new Date();
-      const hora = now.toLocaleTimeString("es-PE", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
-      // temperatura nueva (random alrededor del último valor)
-      const delta = (Math.random() * 0.6 - 0.3).toFixed(1); // -0.3 a +0.3
-      const nuevoValor = +(last.valor + Number(delta)).toFixed(1);
-
-      const nuevaSerie = [
-        ...mockLecturas.serie.slice(-8), // mantén solo últimas 8
-        { hora, valor: nuevoValor },
-      ];
-
-      const valores = nuevaSerie.map((p) => p.valor);
-      const min = Math.min(...valores);
-      const max = Math.max(...valores);
-      const actual = nuevaSerie[nuevaSerie.length - 1].valor;
-
-      mockLecturas = { serie: nuevaSerie, min, max, actual };
-      return mockLecturas;
-    }
-
-    throw new Error(`URL mock no soportada: ${url}`);
-  };
-
+  // 1) CARGA REAL DESDE BACKEND (SOLO UNA VEZ)
   useEffect(() => {
     let cancelado = false;
 
-    const cargarDatos = async () => {
+    const cargarDatosIniciales = async () => {
       try {
-        console.log("⏱ tick temperatura");
         setErr("");
 
-        const dispositivos = await getJSON("/api/dispositivos");
+        // si ya tienes /api/dispositivos úsalo,
+        // sino puedes poner directamente const dispositivoId = 1;
+        const resDisp = await fetch("/api/dispositivos");
+        if (!resDisp.ok) throw new Error("Error cargando dispositivos");
+        const dispositivos = await resDisp.json();
+
         const temp = dispositivos.find((d) => d.tipo === "Temperatura");
         if (!temp) throw new Error("No hay dispositivo de temperatura");
 
-        const js = await getJSON(`/api/lecturas/serie/${temp.id}`);
+        const resLect = await fetch(`/api/lecturas/serie/${temp.id}`);
+        if (!resLect.ok) throw new Error("Error cargando lecturas");
+
+        const js = await resLect.json();
         if (cancelado) return;
 
         setSerie(js.serie || []);
         setStats({ min: js.min, max: js.max, actual: js.actual });
       } catch (e) {
         if (cancelado) return;
-        setErr(e.message);
         console.error(e);
+        setErr(e.message);
       }
     };
 
-    // primera carga
-    cargarDatos();
-
-    // recarga cada 1 segundo
-    const id = setInterval(cargarDatos, 1000);
+    cargarDatosIniciales();
 
     return () => {
       cancelado = true;
-      clearInterval(id);
     };
   }, []);
+
+  // 2) ANIMACIÓN LOCAL (NO LLAMA MÁS AL BACKEND)
+  useEffect(() => {
+    // solo empezamos animación cuando ya hay datos reales
+    if (serie.length === 0) return;
+
+    const id = setInterval(() => {
+      setSerie((prev) => {
+        if (!prev.length) return prev;
+
+        const last = prev[prev.length - 1];
+
+        // variación suave -0.3 a +0.3 °C
+        const delta = +(Math.random() * 0.6 - 0.3).toFixed(1);
+        const nuevoValor = +(last.valor + delta).toFixed(1);
+
+        const now = new Date();
+        const hora = now.toLocaleTimeString("es-PE", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        // mantenemos solo últimas 8–9 lecturas
+        const nuevaSerie = [...prev.slice(-8), { hora, valor: nuevoValor }];
+
+        const valores = nuevaSerie.map((p) => p.valor);
+        const min = Math.min(...valores);
+        const max = Math.max(...valores);
+        const actual = nuevaSerie[nuevaSerie.length - 1].valor;
+
+        // actualizamos stats usando la nueva serie
+        setStats({ min, max, actual });
+
+        return nuevaSerie;
+      });
+    }, 1000); // cada 1 segundo
+
+    return () => clearInterval(id);
+  }, [serie.length]); // se crea el intervalo solo cuando hay datos
 
   const data = useMemo(
     () => ({

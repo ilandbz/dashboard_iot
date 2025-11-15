@@ -54,4 +54,5 @@ Route::post('/estudiantes', [EstudianteController::class, 'store']);
 Route::get('/horarios/by-aula/{aula}', [HorarioController::class, 'byAula']);
 
 // Lecturas (gráfico)
-Route::get('/lecturas/serie/{dispositivo}', [LecturaController::class, 'serie']);
+//Route::get('/lecturas/serie/{dispositivo}', [LecturaController::class, 'serie']);
+Route::get('/api/lecturas/serie/{id}', [LecturaController::class, 'serie']);
